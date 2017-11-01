@@ -12,7 +12,7 @@ CLIENT_ID = os.environ['CLIENT_ID']
 CLIENT_SECRET = os.environ['CLIENT_SECRET']
 
 @app.route('/repos/<keyword>', methods=['GET'])
-def sorted_repos(keyword):
+def repos_for_keyword(keyword):
   """ Get repos which match the keyword search """
 
   keyword = keyword.replace('+', ' ')
@@ -30,10 +30,10 @@ def sorted_repos(keyword):
   return jsonify(items)
 
 @app.route('/commits/<path:repo>', methods=['GET'])
-def sorted_users_for_repo(repo):
-  """ Get users who have commited in the repo in the last month """
+def users_for_repo(repo, weeks=400):
+  """ Get users who have commited in the repo in the last N weeks """
 
-  params = {'since': (datetime.now() - timedelta(weeks=400)).isoformat(),
+  params = {'since': (datetime.now() - timedelta(weeks=weeks)).isoformat(),
             'client_id': CLIENT_ID,
             'client_secret': CLIENT_SECRET}
   r = requests.get(BASE_URL + '/repos/%s/commits' % repo, params)
@@ -51,14 +51,14 @@ def sorted_users_for_repo(repo):
   return jsonify(list(users))
 
 @app.route('/users/<keyword>', methods=['GET'])
-def sorted_users_for_keyword(keyword):
+def users_for_keyword(keyword):
   """ Find the top users who have commited in repositories matching the keyword in the last month """
 
-  repos = sorted_repos(keyword)
+  repos = repos_for_keyword(keyword)
   repos = json.loads(repos.get_data())
   users = set()
   for repo in repos:
-    users_list = sorted_users_for_repo(repo)
+    users_list = users_for_repo(repo, weeks=400)
     users_list = json.loads(users_list.get_data())
     for user in users_list:
       users.add(tuple(user))
