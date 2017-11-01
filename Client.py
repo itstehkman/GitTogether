@@ -11,8 +11,9 @@ BASE_URL = 'https://api.github.com'
 CLIENT_ID = os.environ['CLIENT_ID']
 CLIENT_SECRET = os.environ['CLIENT_SECRET']
 
-@app.route('/repos/<keyword>', methods=['GET'])
-def repos_for_keyword(keyword):
+# Helpers
+
+def _repos_for_keyword(keyword):
   """ Get repos which match the keyword search """
 
   keyword = keyword.replace('+', ' ')
@@ -22,16 +23,10 @@ def repos_for_keyword(keyword):
   r = requests.get(BASE_URL + '/search/repositories', params)
   print r.url
   print {k:v for k,v in r.headers.iteritems() if 'Rate' in k}
+  return [item['full_name'] for item in r.json()['items']]
 
-  r_json = r.json()
-  items = []
-  for item in r_json['items']:
-    items.append(item['full_name'])
-  return jsonify(items)
-
-@app.route('/commits/<path:repo>', methods=['GET'])
-def users_for_repo(repo, weeks=400):
-  """ Get users who have commited in the repo in the last N weeks """
+def _users_for_repo(repo, weeks=400):
+  """ Returns users that have commited in a repo in the last N weeks """
 
   params = {'since': (datetime.now() - timedelta(weeks=weeks)).isoformat(),
             'client_id': CLIENT_ID,
@@ -39,7 +34,6 @@ def users_for_repo(repo, weeks=400):
   r = requests.get(BASE_URL + '/repos/%s/commits' % repo, params)
   print r.url
   print {k:v for k,v in r.headers.iteritems() if 'Rate' in k}
-
   r_json = r.json()
   users = set()
   for commit in r_json:
@@ -47,19 +41,27 @@ def users_for_repo(repo, weeks=400):
       user = (commit['author']['login'], commit['commit']['author']['email'],
               commit['commit']['author']['name'])
       users.add(user)
+  return list(users)
 
-  return jsonify(list(users))
+# Flask routes
+
+@app.route('/repos/<keyword>', methods=['GET'])
+def repos_for_keyword(keyword):
+  return jsonify(_repos_for_keyword(keyword))
+
+@app.route('/commits/<path:repo>', methods=['GET'])
+def users_for_repo(repo, weeks=400):
+  users = _users_for_repo(repo, weeks=weeks)
+  return jsonify(users)
 
 @app.route('/users/<keyword>', methods=['GET'])
 def users_for_keyword(keyword):
   """ Find the top users who have commited in repositories matching the keyword in the last month """
 
-  repos = repos_for_keyword(keyword)
-  repos = json.loads(repos.get_data())
+  repos = _repos_for_keyword(keyword)
   users = set()
   for repo in repos:
-    users_list = users_for_repo(repo, weeks=400)
-    users_list = json.loads(users_list.get_data())
+    users_list = _users_for_repo(repo, weeks=400)
     for user in users_list:
       users.add(tuple(user))
   return jsonify(list(users))
